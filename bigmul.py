@@ -416,8 +416,11 @@ def multiply(text_a, text_b, method):
         from transforms import ArbitraryLengthFFT
         engine = ArbitraryLengthFFT()
         conv, N = multiply_transform(limbs_a, limbs_b, engine)
+    elif method == "ntt":
+     conv, N = multiply_ntt(limbs_a, limbs_b)
+
     else:
-        raise ValueError(f"Unknown multiplication method: {method}")
+     raise ValueError(f"Unknown multiplication method: {method}")
 
     product_str = from_limbs(sign_prod, conv)
     return product_str, N, limbs_a, limbs_b
