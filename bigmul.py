@@ -184,7 +184,193 @@ def multiply_transform(a, b, engine):
     conv_res = np.round(c_raw.real).astype(np.int64)
     return conv_res, N
     
+# ---------------------------------------------------------------------------
+# BONUS: Number Theoretic Transform (NTT)
+# ---------------------------------------------------------------------------
 
+# Both primes support sufficiently large power-of-two NTT sizes.
+NTT_PRIME_1 = 998244353
+NTT_ROOT_1 = 3
+
+NTT_PRIME_2 = 1004535809
+NTT_ROOT_2 = 3
+
+
+def ntt(a, invert, mod, root):
+    """
+    Iterative radix-2 Number Theoretic Transform.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        Integer coefficients.
+    invert : bool
+        False -> forward NTT
+        True  -> inverse NTT
+    mod : int
+        NTT prime modulus.
+    root : int
+        Primitive root modulo mod.
+
+    Returns
+    -------
+    numpy.ndarray
+        Transformed coefficients modulo mod.
+    """
+
+    a = np.asarray(a, dtype=np.int64).copy()
+    n = len(a)
+
+    if n <= 1:
+        return a
+
+    if n & (n - 1):
+        raise ValueError("NTT length must be a power of two.")
+
+    # Bit-reversal permutation
+    j = 0
+
+    for i in range(1, n):
+        bit = n >> 1
+
+        while j & bit:
+            j ^= bit
+            bit >>= 1
+
+        j ^= bit
+
+        if i < j:
+            a[i], a[j] = a[j], a[i]
+
+    # Cooley-Tukey stages
+    length = 2
+
+    while length <= n:
+
+        wlen = pow(root, (mod - 1) // length, mod)
+
+        if invert:
+            wlen = pow(wlen, mod - 2, mod)
+
+        half = length // 2
+
+        for start in range(0, n, length):
+
+            w = 1
+
+            for i in range(start, start + half):
+
+                u = int(a[i])
+                v = (int(a[i + half]) * w) % mod
+
+                a[i] = (u + v) % mod
+                a[i + half] = (u - v) % mod
+
+                w = (w * wlen) % mod
+
+        length <<= 1
+
+    # Divide by N for inverse transform
+    if invert:
+        n_inv = pow(n, mod - 2, mod)
+
+        for i in range(n):
+            a[i] = (int(a[i]) * n_inv) % mod
+
+    return a
+
+
+def ntt_convolution_mod(a, b, mod, root):
+    """
+    Linear convolution of two integer arrays modulo mod using NTT.
+    """
+
+    required = len(a) + len(b) - 1
+    N = next_power_of_two(required)
+
+    A = np.zeros(N, dtype=np.int64)
+    B = np.zeros(N, dtype=np.int64)
+
+    for i, value in enumerate(a):
+        A[i] = int(value) % mod
+
+    for i, value in enumerate(b):
+        B[i] = int(value) % mod
+
+    FA = ntt(A, False, mod, root)
+    FB = ntt(B, False, mod, root)
+
+    FC = np.zeros(N, dtype=np.int64)
+
+    for i in range(N):
+        FC[i] = (int(FA[i]) * int(FB[i])) % mod
+
+    C = ntt(FC, True, mod, root)
+
+    return C[:required], N
+
+
+def multiply_ntt(a, b):
+    """
+    Exact polynomial multiplication using two NTT primes and CRT.
+
+    Returns
+    -------
+    (numpy.ndarray, int)
+        Raw convolution coefficients and transform length.
+    """
+
+    required = len(a) + len(b) - 1
+
+    # First NTT
+    c1, N = ntt_convolution_mod(
+        a,
+        b,
+        NTT_PRIME_1,
+        NTT_ROOT_1
+    )
+
+    # Second NTT
+    c2, N2 = ntt_convolution_mod(
+        a,
+        b,
+        NTT_PRIME_2,
+        NTT_ROOT_2
+    )
+
+    if N != N2:
+        raise RuntimeError("NTT transform lengths do not match.")
+
+    # CRT:
+    #
+    # x = c1 (mod p1)
+    # x = c2 (mod p2)
+    #
+    # x = c1 + p1 * t
+    #
+    # t = (c2-c1) * inverse(p1) (mod p2)
+
+    p1 = NTT_PRIME_1
+    p2 = NTT_PRIME_2
+
+    p1_inv_mod_p2 = pow(p1, p2 - 2, p2)
+
+    result = np.zeros(required, dtype=np.int64)
+
+    for i in range(required):
+
+        r1 = int(c1[i])
+        r2 = int(c2[i])
+
+        difference = (r2 - r1) % p2
+
+        t = (difference * p1_inv_mod_p2) % p2
+
+        value = r1 + p1 * t
+
+        result[i] = value
+
+    return result, N
 
 def multiply_schoolbook(a, b):
     """
@@ -343,7 +529,7 @@ def main():
     ap = argparse.ArgumentParser(description="Big-integer multiplication by DFT/FFT")
     ap.add_argument("input", nargs="?", help="input file with the two operands")
     ap.add_argument("--engine", default="fft",
-                    choices=["dft", "fft", "schoolbook", "arbitrary"])
+                    choices=["dft", "fft", "schoolbook", "arbitrary","ntt"])
     ap.add_argument("--out-dir", default="outputs")
     ap.add_argument("--benchmark", action="store_true",
                     help="run the timing study instead of a single multiplication")
@@ -367,3 +553,4 @@ if __name__ == "__main__":
 # python bigmul.py inputs/4.txt --engine fft --out-dir outputs/task_a/4
 #python bigmul.py --benchmark --out-dir outputs/task_a/benchmark
 # python bigmul.py inputs/3.txt --engine arbitrary --out-dir outputs/task_a/arbitrary_3
+#python bigmul.py inputs/1.txt --engine ntt --out-dir outputs/task_a/ntt_1
