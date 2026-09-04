@@ -180,6 +180,10 @@ class FFTTransformer(DFTAnalyzer):
     name = "fft"
 
     @staticmethod
+    
+    def _is_power_of_two(n):
+     return n > 0 and (n & (n - 1)) == 0
+    @staticmethod
     def _bit_reverse_indices(n):
         bits = int(np.log2(n))
         indices = np.arange(n)
@@ -192,50 +196,40 @@ class FFTTransformer(DFTAnalyzer):
         return reversed_indices
 
     def transform(self, x):
-        """
-        Forward FFT using iterative Cooley-Tukey algorithm.
-        """
+     x = np.asarray(x, dtype=np.complex128)
+     N = x.shape[0]
 
-        x = np.asarray(x, dtype=np.complex128)
-        N = x.shape[0]
+     if N <= 1:
+        return x
 
-        if N <= 1:
-            return x
+     if N & (N - 1):
+        raise ValueError(
+            f"Length N={N} must be a power of two for Radix-2 FFT."
+        )
 
-        # Radix-2 FFT requires power-of-two length
-        if N & (N - 1):
-            raise ValueError(
-                f"Length N={N} must be a power of two for Radix-2 FFT."
-            )
+     rev = self._bit_reverse_indices(N)
+     A = x[rev].copy()
 
-        # Bit-reversal permutation
-        rev = self._bit_reverse_indices(N)
-        A = x[rev].copy()
+     s = 1
 
-        # Iterative Cooley-Tukey butterfly
-        s = 1
+     while (1 << s) <= N:
+        m = 1 << s
+        m2 = m >> 1
 
-        while (1 << s) <= N:
-            m = 1 << s
-            m2 = m >> 1
+        w_m = np.exp(-2j * np.pi / m)
+        w_powers = w_m ** np.arange(m2)
 
-            # Twiddle factor for this stage
-            w_m = np.exp(-2j * np.pi / m)
-            w_powers = w_m ** np.arange(m2)
+        for k in range(0, N, m):
+            t = w_powers * A[k + m2 : k + m]
+            u = A[k : k + m2].copy()
 
-            for k in range(0, N, m):
+            A[k : k + m2] = u + t
+            A[k + m2 : k + m] = u - t
 
-                t = w_powers * A[k + m2 : k + m]
+        s += 1
 
-                # IMPORTANT: copy to avoid NumPy view problem
-                u = A[k : k + m2].copy()
-
-                A[k : k + m2] = u + t
-                A[k + m2 : k + m] = u - t
-
-            s += 1
-
-        return A
+     return A
+       
 
     def inverse(self, spectrum):
         """

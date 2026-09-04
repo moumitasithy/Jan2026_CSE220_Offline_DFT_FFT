@@ -366,3 +366,4 @@ if __name__ == "__main__":
 # python bigmul.py inputs/3.txt --engine fft --out-dir outputs/task_a/3
 # python bigmul.py inputs/4.txt --engine fft --out-dir outputs/task_a/4
 #python bigmul.py --benchmark --out-dir outputs/task_a/benchmark
+# python bigmul.py inputs/3.txt --engine arbitrary --out-dir outputs/task_a/arbitrary_3
