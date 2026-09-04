@@ -451,3 +451,6 @@ def main():
 if __name__ == "__main__":
     main()
 #python image_conv.py images/skyline512.png --kernel bokeh --param 9 --engine fft --out-dir outputs/task_b/skyline_bokeh
+#python image_conv.py images/sunset512.png --gray --kernel motion --param 41 --engine fft --out-dir outputs/task_b/sunset_motion 
+#python image_conv.py images/skyline256.png --gray --kernel gaussian --param 21 --engine dft --out-dir outputs/task_b/skyline256_gaussian_dft
+#python image_conv.py images/skyline512.png --benchmark --out-dir outputs/task_b/benchmark

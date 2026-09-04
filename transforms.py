@@ -175,6 +175,8 @@ class FFTTransformer(DFTAnalyzer):
     #     # TODO: implement this method
     #     raise NotImplementedError("Implement FFTTransformer.inverse")
     # class FFTTransformer:
+    
+
     name = "fft"
 
     @staticmethod
@@ -182,46 +184,71 @@ class FFTTransformer(DFTAnalyzer):
         bits = int(np.log2(n))
         indices = np.arange(n)
         reversed_indices = np.zeros(n, dtype=int)
+
         for i in range(bits):
             reversed_indices = (reversed_indices << 1) | (indices & 1)
             indices >>= 1
+
         return reversed_indices
 
     def transform(self, x):
+        """
+        Forward FFT using iterative Cooley-Tukey algorithm.
+        """
+
         x = np.asarray(x, dtype=np.complex128)
         N = x.shape[0]
+
         if N <= 1:
             return x
 
-        # Bit reversal permutation
+        # Radix-2 FFT requires power-of-two length
+        if N & (N - 1):
+            raise ValueError(
+                f"Length N={N} must be a power of two for Radix-2 FFT."
+            )
+
+        # Bit-reversal permutation
         rev = self._bit_reverse_indices(N)
         A = x[rev].copy()
 
-        # Iterative Cooley-Tukey
+        # Iterative Cooley-Tukey butterfly
         s = 1
+
         while (1 << s) <= N:
             m = 1 << s
             m2 = m >> 1
+
+            # Twiddle factor for this stage
             w_m = np.exp(-2j * np.pi / m)
-            
             w_powers = w_m ** np.arange(m2)
-            
+
             for k in range(0, N, m):
+
                 t = w_powers * A[k + m2 : k + m]
-                u = A[k : k + m2]
+
+                # IMPORTANT: copy to avoid NumPy view problem
+                u = A[k : k + m2].copy()
+
                 A[k : k + m2] = u + t
                 A[k + m2 : k + m] = u - t
+
             s += 1
 
         return A
 
     def inverse(self, spectrum):
+        """
+        Inverse FFT using conjugate-transform-conjugate method.
+        """
+
         X = np.asarray(spectrum, dtype=np.complex128)
         N = X.shape[0]
+
         if N <= 1:
             return X
-        return np.conj(self.transform(np.conj(X))) / N
 
+        return np.conj(self.transform(np.conj(X))) / N
 # ---------------------------------------------------------------------------
 # BONUS (optional) -- arbitrary-length FFT.
 #
